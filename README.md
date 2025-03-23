@@ -43,26 +43,21 @@ project/
 
 ## 🛠️ Installation
 
-Install required packages manually:
-
-```bash
-pip install torch pandas numpy scikit-learn
-```
-
-**Or** use the included `requirements.txt`:
+Install with `pip`:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-**Sample `requirements.txt`:**
-
+**requirements.txt:**
 ```
 torch
 pandas
 numpy
 scikit-learn
 ```
+
+✅ All packages are compatible with standard Python environments (tested on Python 3.8+).
 
 ---
 
@@ -81,12 +76,12 @@ Datasets are preprocessed via `utils/data_loader.py` and wrapped using `GroupDat
 
 ## 🧠 Supported Models
 
-| Model       | Paper                                                                                  |
-|-------------|------------------------------------------------------------------------------------------|
-| **NODE**     | [Neural Oblivious Decision Ensembles for Deep Learning on Tabular Data](https://arxiv.org/abs/1909.06312) |
-| **AutoInt**  | [AutoInt: Automatic Feature Interaction Learning via Self-Attentive Neural Networks](https://dl.acm.org/doi/10.1145/3357384.3358028) |
-| **DeepFM**   | [DeepFM: A Factorization-Machine based Neural Network for CTR Prediction](https://www.ijcai.org/Proceedings/2017/0239.pdf) |
-| **TabNet**   | [TabNet: Attentive Interpretable Tabular Learning](https://arxiv.org/abs/1908.07442) |
+| Model       | Description & Paper                                                                                  |
+|-------------|-------------------------------------------------------------------------------------------------------|
+| **NODE**     | [Neural Oblivious Decision Ensembles for Deep Learning on Tabular Data (Popov et al., 2019)](https://arxiv.org/abs/1909.06312) |
+| **AutoInt**  | [AutoInt: Automatic Feature Interaction Learning via Self-Attentive Neural Networks (Song et al., 2019)](https://arxiv.org/abs/1810.11921) |
+| **DeepFM**   | [DeepFM: A Factorization-Machine based Neural Network for CTR Prediction (Guo et al., 2017)](https://www.ijcai.org/Proceedings/2017/0239.pdf) |
+| **TabNet**   | [TabNet: Attentive Interpretable Tabular Learning (Arik & Pfister, 2019)](https://arxiv.org/abs/1908.07442) |
 
 ---
 
@@ -95,7 +90,7 @@ Datasets are preprocessed via `utils/data_loader.py` and wrapped using `GroupDat
 | Method       | Description & Paper                                                                                              |
 |--------------|------------------------------------------------------------------------------------------------------------------|
 | **GroupDRO** | [Distributionally Robust Neural Networks for Group Shifts (Sagawa et al., ICLR 2020)](https://arxiv.org/abs/1911.08731) |
-| **D3M**      | [Dynamic Data Debiasing via Matching (Park et al., NeurIPS 2022)](https://proceedings.neurips.cc/paper_files/paper/2022/hash/e0a3a51f0f7c1f55b9f404d9dfb148d3-Abstract-Conference.html) |
+| **D3M**      | [Dynamic Data Debiasing via Matching (Park et al., NeurIPS 2022)](https://arxiv.org/abs/2206.01511) |
 
 ---
 
@@ -125,13 +120,13 @@ python main.py --config experiments/adult_autoint.json
 
 ### 🧠 Models
 - Popov et al. *Neural Oblivious Decision Ensembles for Deep Learning on Tabular Data*. [arXiv:1909.06312](https://arxiv.org/abs/1909.06312)
-- Song et al. *AutoInt: Automatic Feature Interaction Learning via Self-Attentive Neural Networks*. CIKM 2019.
-- Guo et al. *DeepFM: A Factorization-Machine based Neural Network for CTR Prediction*. IJCAI 2017.
-- Arik and Pfister. *TabNet: Attentive Interpretable Tabular Learning*. AAAI 2021.
+- Song et al. *AutoInt: Automatic Feature Interaction Learning via Self-Attentive Neural Networks*. [arXiv:1810.11921](https://arxiv.org/abs/1810.11921)
+- Guo et al. *DeepFM: A Factorization-Machine based Neural Network for CTR Prediction*. IJCAI 2017. [PDF](https://www.ijcai.org/Proceedings/2017/0239.pdf)
+- Arik and Pfister. *TabNet: Attentive Interpretable Tabular Learning*. [arXiv:1908.07442](https://arxiv.org/abs/1908.07442)
 
 ### ⚙️ Methods
-- Sagawa et al. *Distributionally Robust Neural Networks for Group Shifts*. ICLR 2020. [arXiv:1911.08731](https://arxiv.org/abs/1911.08731)
-- Park et al. *Dynamic Data Debiasing via Matching*. NeurIPS 2022.
+- Sagawa et al. *Distributionally Robust Neural Networks for Group Shifts*. [arXiv:1911.08731](https://arxiv.org/abs/1911.08731)
+- Park et al. *Dynamic Data Debiasing via Matching*. [arXiv:2206.01511](https://arxiv.org/abs/2206.01511)
 
 ---
 
