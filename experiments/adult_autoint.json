@@ -1,0 +1,17 @@
+{
+    "dataset": "adult",
+    "model_type": "autoint",
+    "method": "d3m",
+    "model_params": {
+      "input_dim": 12,
+      "embedding_dim": 8,
+      "num_heads": 2,
+      "num_layers": 2,
+      "num_classes": 2
+    },
+    "train_params": {
+      "epochs": 10,
+      "lr": 0.001
+    }
+  }
+  
