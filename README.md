@@ -90,7 +90,7 @@ Datasets are preprocessed via `utils/data_loader.py` and wrapped using `GroupDat
 | Method       | Description & Paper                                                                                              |
 |--------------|------------------------------------------------------------------------------------------------------------------|
 | **GroupDRO** | [Distributionally Robust Neural Networks for Group Shifts (Sagawa et al., ICLR 2020)](https://arxiv.org/abs/1911.08731) |
-| **D3M**      | [Dynamic Data Debiasing via Matching (Park et al., NeurIPS 2022)](https://arxiv.org/abs/2206.01511) |
+| **D3M**      | [Data Debiasing with Datamodels (D3M): Improving Subgroup Robustness via Data Selection (Kim et al., 2024)](https://arxiv.org/abs/2406.16846) |
 
 ---
 
@@ -126,7 +126,7 @@ python main.py --config experiments/adult_autoint.json
 
 ### ⚙️ Methods
 - Sagawa et al. *Distributionally Robust Neural Networks for Group Shifts*. [arXiv:1911.08731](https://arxiv.org/abs/1911.08731)
-- Park et al. *Dynamic Data Debiasing via Matching*. [arXiv:2206.01511](https://arxiv.org/abs/2206.01511)
+- Kim et al. *Data Debiasing with Datamodels (D3M): Improving Subgroup Robustness via Data Selection*. [arXiv:2406.16846](https://arxiv.org/abs/2406.16846)
 
 ---
 
