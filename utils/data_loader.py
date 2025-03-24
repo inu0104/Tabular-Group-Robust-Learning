@@ -11,30 +11,27 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 
 class GroupDataset(Dataset):
     def __init__(self, file_path):
-        """
-        데이터셋 로드 및 PyTorch Dataset 형태로 변환
-        """
         self.data = pd.read_csv(file_path)
 
         # sample_id, group 유지 
         self.sample_ids = self.data["sample_id"].values
-        self.groups = self.data["group"].values  # group 컬럼 추가
+        self.groups = self.data["group"].values  
 
         # Features & Labels
         self.features = self.data.drop(columns=["target", "sample_id", "group"]).values 
         self.labels = self.data["target"].values 
 
-        # PyTorch Tensor 변환
+        # PyTorch Tensor
         self.features = torch.tensor(self.features, dtype=torch.float32)
         self.labels = torch.tensor(self.labels, dtype=torch.long)
         self.sample_ids = torch.tensor(self.sample_ids, dtype=torch.long)
-        self.groups = torch.tensor(self.groups, dtype=torch.long)  # 그룹 정보 추가
+        self.groups = torch.tensor(self.groups, dtype=torch.long)  
 
     def __len__(self):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        return self.features[idx], self.labels[idx], self.groups[idx], self.sample_ids[idx]  # group 추가됨
+        return self.features[idx], self.labels[idx], self.groups[idx], self.sample_ids[idx] 
 
 
 def get_column_names(names_file):
@@ -62,9 +59,10 @@ def load_data(config):
     if dataset == 'adult':
         
         train_file = "./dataset/adult/train_processed.csv"
+        val_file = "./dataset/adult/valid_processed.csv"
         test_file = "./dataset/adult/test_processed.csv"
         
-        if not (os.path.exists(train_file) and os.path.exists(test_file)):
+        if not (os.path.exists(train_file) and os.path.exists(test_file) and os.path.exists(val_file)):
             
             names_path = "./dataset/adult/adult.names"
             train_path = "./dataset/adult/adult.data"
@@ -94,10 +92,9 @@ def load_data(config):
 
             # train["group"] = (train["sex"] * 2 + train["race"]).astype(int)
             # test["group"] = (test["sex"] * 2 + test["race"]).astype(int)
-            train["group"] = train["race"]
-            test["group"] = test["race"]
+            train["group"] = train["sex"]
+            test["group"] = test["sex"]
             
-            # sex, race 제거 (group만 유지)
             train.drop(columns=group, inplace=True)
             test.drop(columns=group, inplace=True)
 
@@ -106,11 +103,23 @@ def load_data(config):
             scaler.fit(train[numerical_columns])
             train[numerical_columns] = scaler.transform(train[numerical_columns])
             test[numerical_columns] = scaler.transform(test[numerical_columns])
+            
+            full_train_df = train 
+            test_df = test 
 
-            train_df = train.reset_index().rename(columns={"index": "sample_id"})
-            test_df = test.reset_index().rename(columns={"index": "sample_id"})
+            train_df, val_df = train_test_split(
+                full_train_df,
+                test_size=0.2,
+                stratify=full_train_df["target"],
+                random_state=42
+            )
+
+            for df in [train_df, val_df, test_df]:
+                df.reset_index(inplace=True)
+                df.rename(columns={"index": "sample_id"}, inplace=True)
 
             train_df.to_csv(train_file, index=False)
+            val_df.to_csv(val_file, index=False)
             test_df.to_csv(test_file, index=False)
 
 #########################################################################################################
@@ -120,19 +129,18 @@ def load_data(config):
         
         data_path = "./dataset/compas/cox-violent-parsed_filt.csv"
         train_file = "./dataset/compas/train_processed.csv"
+        val_file = "./dataset/compas/valid_processed.csv"
         test_file = "./dataset/compas/test_processed.csv"
 
-        if not (os.path.exists(train_file) and os.path.exists(test_file)):
+        if not (os.path.exists(train_file) and os.path.exists(test_file) and os.path.exists(val_file)):
             df = pd.read_csv(data_path)
          
             df["target"] = df["is_recid"].astype(int)
             df = df[df['target']!=-1]
-
-            # Group 설정 (race or sex)            
+  
             le = LabelEncoder()
             df["group"] = le.fit_transform(df["sex"])
             
-            # 불필요한 컬럼 제거
             drop_cols = [
                 'id', 'name', 'first', 'last', 'sex', 'dob', 'is_recid', 'race',
                 'c_jail_in', 'c_jail_out', 'c_days_from_compas', 'c_charge_desc',
@@ -142,9 +150,7 @@ def load_data(config):
                 'decile_score.1', 'screening_date', 'event',
                 'priors_count.1', 'start', 'end', 
                 'decile_score','v_decile_score',
-                'r_charge_degree'
-                 #data_leakeage
-                
+                'r_charge_degree' #data_leakeage
             ]
             df.drop(columns=drop_cols, inplace=True, errors='ignore')
 
@@ -172,13 +178,15 @@ def load_data(config):
             feature_cols = [col for col in df_final.columns if col not in ["sample_id", "target", "group"]]
             df_final[feature_cols] = df_final[feature_cols].astype("float32")
             
-            # Train/Test Split (타깃 분포 유지)
-            train_df, test_df = train_test_split(df_final, test_size=0.3, random_state=42, stratify=df_final["target"])
+            train_val_df, test_df = train_test_split(df_final, test_size=0.2, random_state=42, stratify=df_final["target"])
+            train_df, val_df = train_test_split(train_val_df, test_size=0.25, random_state=42, stratify=train_val_df["target"])
 
-            train_df = train_df.reset_index().rename(columns={"index": "sample_id"})
-            test_df = test_df.reset_index().rename(columns={"index": "sample_id"})
+            for df in [train_df, val_df, test_df]:
+                df.reset_index(inplace=True)
+                df.rename(columns={"index": "sample_id"}, inplace=True)
 
             train_df.to_csv(train_file, index=False)
+            val_df.to_csv(val_file, index=False)
             test_df.to_csv(test_file, index=False)
    
 #########################################################################################################  
@@ -187,9 +195,10 @@ def load_data(config):
     elif(dataset == 'german'):
         data_path = "./dataset/german/german_credit.csv"
         train_file = "./dataset/german/train_processed.csv"
+        val_file = "./dataset/german/valid_processed.csv"
         test_file = "./dataset/german/test_processed.csv"
         
-        if not (os.path.exists(train_file) and os.path.exists(test_file)):
+        if not (os.path.exists(train_file) and os.path.exists(test_file) and os.path.exists(val_file)):
             df = pd.read_csv(data_path)
             
             df["target"] = df["class"].astype(int)
@@ -201,7 +210,6 @@ def load_data(config):
             numerical_columns = ["Attribute" + str(i) for i in range(1, 21)]
             df[numerical_columns] = df[numerical_columns].fillna(0)
             
-            # 만약 추가적으로 object 타입의 범주형 변수가 있다면 one-hot encoding 처리
             categorical_columns = [col for col in df.columns if df[col].dtype == 'object']
             if len(categorical_columns) > 0:
                 df = pd.get_dummies(df, columns=categorical_columns, drop_first=True)
@@ -212,12 +220,15 @@ def load_data(config):
             feature_cols = [col for col in df_final.columns if col not in ["sample_id", "target", "group"]]
             df_final[feature_cols] = df_final[feature_cols].astype("float32")
             
-            train_df, test_df = train_test_split(df_final, test_size=0.3, random_state=42, stratify=df_final["target"])
-            
-            train_df = train_df.reset_index().rename(columns={"index": "sample_id"})
-            test_df = test_df.reset_index().rename(columns={"index": "sample_id"})
-            
+            train_val_df, test_df = train_test_split(df_final, test_size=0.2, random_state=42, stratify=df_final["target"])
+            train_df, val_df = train_test_split(train_val_df, test_size=0.25, random_state=42, stratify=train_val_df["target"])
+
+            for df in [train_df, val_df, test_df]:
+                df.reset_index(inplace=True)
+                df.rename(columns={"index": "sample_id"}, inplace=True)
+
             train_df.to_csv(train_file, index=False)
+            val_df.to_csv(val_file, index=False)
             test_df.to_csv(test_file, index=False)
  
 ######################################################################################################### 
@@ -226,9 +237,10 @@ def load_data(config):
     elif(dataset == 'law'):
         data_path = "./dataset/law/law_school.csv"
         train_file = "./dataset/law/train_processed.csv"
+        val_file = "./dataset/law/valid_processed.csv"
         test_file = "./dataset/law/test_processed.csv"
 
-        if not (os.path.exists(train_file) and os.path.exists(test_file)):
+        if not (os.path.exists(train_file) and os.path.exists(test_file) and os.path.exists(val_file)):
             df = pd.read_csv(data_path)
             df.dropna(axis=0, inplace=True)
             
@@ -263,25 +275,27 @@ def load_data(config):
             feature_cols = [col for col in df_final.columns if col not in ["sample_id", "target", "group"]]
             df_final[feature_cols] = df_final[feature_cols].astype("float32")
             
-            # Train/Test Split (타깃 분포 유지)
-            train_df, test_df = train_test_split(df_final, test_size=0.3, random_state=42, stratify=df_final["target"])
-            
-            train_df = train_df.reset_index().rename(columns={"index": "sample_id"})
-            test_df = test_df.reset_index().rename(columns={"index": "sample_id"})
-            
+            train_val_df, test_df = train_test_split(df_final, test_size=0.2, random_state=42, stratify=df_final["target"])
+            train_df, val_df = train_test_split(train_val_df, test_size=0.25, random_state=42, stratify=train_val_df["target"])
+
+            for df in [train_df, val_df, test_df]:
+                df.reset_index(inplace=True)
+                df.rename(columns={"index": "sample_id"}, inplace=True)
+
             train_df.to_csv(train_file, index=False)
+            val_df.to_csv(val_file, index=False)
             test_df.to_csv(test_file, index=False)
 
 #########################################################################################################  
            
     train_df = pd.read_csv(train_file)
     
-    # Dataset 생성
     train_dataset = GroupDataset(train_file)
+    valid_dataset = GroupDataset(val_file)
     test_dataset = GroupDataset(test_file)
 
-    # DataLoader 생성
     train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=32, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
     
-    return train_loader, test_loader, train_df
+    return train_loader, valid_loader, test_loader, train_df

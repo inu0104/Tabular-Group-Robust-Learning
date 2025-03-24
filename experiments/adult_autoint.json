@@ -1,7 +1,7 @@
 {
     "dataset": "adult",
     "model_type": "autoint",
-    "method": "d3m",
+    "method": "group_dro",
     "model_params": {
       "input_dim": 12,
       "embedding_dim": 8,

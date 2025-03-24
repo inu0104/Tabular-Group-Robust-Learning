@@ -35,7 +35,7 @@ class GroupDRO:
         total_loss = sum(self.q[g] * loss_ls[g] for g in range(self.n_groups))
         return total_loss
 
-def run_group_dro(model, train_loader, test_loader, train_df, train_params, device, dataset):
+def run_group_dro(model, train_loader, valid_loader, test_loader, train_df, train_params, device, dataset):
     print(f"🔥 Running GroupDRO Method on {device}...")
 
     n_groups = train_df['group'].nunique()

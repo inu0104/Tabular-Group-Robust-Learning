@@ -61,6 +61,32 @@ scikit-learn
 
 ---
 
+## 📥 Dataset
+
+To run the experiments, download the dataset zip file from the link below:
+
+🔗 [Download Dataset (Google Drive)](https://drive.google.com/file/d/157ZB-alPtSQBzZNuBzbvy4bkbMcUL0tU/view?usp=drive_link)
+
+Once downloaded, extract the contents and place the `dataset/` folder **in the root directory of the project**:
+
+```
+project/
+├── dataset/                ✅ Place extracted folder here
+├── models/
+├── utils/
+├── method/
+├── main.py
+└── ...
+```
+
+After setup, you can run experiments using:
+
+```bash
+python main.py --config experiments/adult_autoint.json
+```
+
+---
+
 ## 📑 Dataset Format
 
 Each dataset should include:

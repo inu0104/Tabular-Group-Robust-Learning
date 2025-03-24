@@ -3,6 +3,7 @@ import torch.nn as nn
 from utils.train import train_or_eval_model  
 
 def evaluate(model, dataloader, dataset_name="Test", device="cuda"):
+    
     outputs, labels = train_or_eval_model(model, dataloader, {}, device, mode="eval")
 
     criterion = nn.NLLLoss(reduction="none")
