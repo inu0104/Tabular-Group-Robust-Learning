@@ -24,13 +24,14 @@ class GroupDataset(Dataset):
         # PyTorch Tensor
         self.features = torch.tensor(self.features, dtype=torch.float32)
         self.labels = torch.tensor(self.labels, dtype=torch.long)
+        self.sample_ids = torch.tensor(self.sample_ids, dtype=torch.long)
         self.groups = torch.tensor(self.groups, dtype=torch.long)  
 
     def __len__(self):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        return self.features[idx], self.labels[idx], self.groups[idx], self.sample_ids[idx], idx
+        return self.features[idx], self.labels[idx], self.groups[idx], self.sample_ids[idx] 
 
 
 def get_column_names(names_file):
