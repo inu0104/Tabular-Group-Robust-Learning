@@ -24,14 +24,13 @@ class GroupDataset(Dataset):
         # PyTorch Tensor
         self.features = torch.tensor(self.features, dtype=torch.float32)
         self.labels = torch.tensor(self.labels, dtype=torch.long)
-        self.sample_ids = torch.tensor(self.sample_ids, dtype=torch.long)
         self.groups = torch.tensor(self.groups, dtype=torch.long)  
 
     def __len__(self):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        return self.features[idx], self.labels[idx], self.groups[idx], self.sample_ids[idx] 
+        return self.features[idx], self.labels[idx], self.groups[idx], self.sample_ids[idx], idx
 
 
 def get_column_names(names_file):
@@ -90,10 +89,10 @@ def load_data(config):
                 test[col] = label_enc.transform(test[col].astype(str))
                 label_encoders[col] = label_enc  
 
-            # train["group"] = (train["sex"] * 2 + train["race"]).astype(int)
-            # test["group"] = (test["sex"] * 2 + test["race"]).astype(int)
-            train["group"] = train["sex"]
-            test["group"] = test["sex"]
+            train["group"] = (train["sex"] * 2 + train["race"]).astype(int)
+            test["group"] = (test["sex"] * 2 + test["race"]).astype(int)
+            #train["group"] = train["sex"]
+            #test["group"] = test["sex"]
             
             train.drop(columns=group, inplace=True)
             test.drop(columns=group, inplace=True)
@@ -178,8 +177,8 @@ def load_data(config):
             feature_cols = [col for col in df_final.columns if col not in ["sample_id", "target", "group"]]
             df_final[feature_cols] = df_final[feature_cols].astype("float32")
             
-            train_val_df, test_df = train_test_split(df_final, test_size=0.2, random_state=42, stratify=df_final["target"])
-            train_df, val_df = train_test_split(train_val_df, test_size=0.25, random_state=42, stratify=train_val_df["target"])
+            train_val_df, test_df = train_test_split(df_final, test_size=0.3, random_state=42, stratify=df_final["target"])
+            train_df, val_df = train_test_split(train_val_df, test_size=0.3, random_state=42, stratify=train_val_df["target"])
 
             for df in [train_df, val_df, test_df]:
                 df.reset_index(inplace=True)
@@ -275,8 +274,8 @@ def load_data(config):
             feature_cols = [col for col in df_final.columns if col not in ["sample_id", "target", "group"]]
             df_final[feature_cols] = df_final[feature_cols].astype("float32")
             
-            train_val_df, test_df = train_test_split(df_final, test_size=0.2, random_state=42, stratify=df_final["target"])
-            train_df, val_df = train_test_split(train_val_df, test_size=0.25, random_state=42, stratify=train_val_df["target"])
+            train_val_df, test_df = train_test_split(df_final, test_size=0.3, random_state=42, stratify=df_final["target"])
+            train_df, val_df = train_test_split(train_val_df, test_size=0.3, random_state=42, stratify=train_val_df["target"])
 
             for df in [train_df, val_df, test_df]:
                 df.reset_index(inplace=True)

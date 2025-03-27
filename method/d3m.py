@@ -7,7 +7,7 @@ from utils.evaluation import evaluate
 from utils.train import train_or_eval_model
 from utils.d3m_utils import compute_grad, tau_vector, alignment_score, new_neg
 
-def run_d3m(model, train_loader, valid_loader, test_loader, train_df, train_params, device, dataset):
+def run_d3m(model, train_loader, valid_loader, test_loader, train_df, train_params, device, dataset, method):
 
     print(f"🔥 Running D3M Method on {device}: Initial Training Phase...")
 

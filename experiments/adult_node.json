@@ -1,7 +1,7 @@
 {
   "dataset": "adult",
   "model_type": "node",
-  "method": "group_dro",
+  "method": "gsr-plus",
   "model_params": {
     "input_dim": 12,
     "hidden_dim": 64,
@@ -10,7 +10,7 @@
     "num_classes": 2
   },
   "train_params": {
-    "epochs": 10,
+    "epochs": 1,
     "lr": 0.001
   }
 }

@@ -10,6 +10,7 @@ from utils.data_loader import load_data
 from method.d3m import run_d3m
 from method.group_dro import run_group_dro
 from method.gsr import run_gsr
+from method.gsr_plus import run_gsr_plus
 from models import node, tabnet, deepfm, autoint
 
 MODEL_CLASSES = {
@@ -21,7 +22,9 @@ MODEL_CLASSES = {
 METHODS = {
     'd3m': run_d3m,
     'group_dro' : run_group_dro,
-    'gsr': run_gsr
+    'gsr': run_gsr,
+    "gsr-hf" : run_gsr,
+    'gsr-plus' : run_gsr_plus
 }
 
 def main(config_file):
@@ -46,7 +49,7 @@ def main(config_file):
     model = model_class(config['model_params']).to(device)
     method_fn = METHODS[config["method"]]  
     dataset = config['dataset']
-    _ = method_fn(model, train_loader, valid_loader, test_loader, train_df, config['train_params'], device, dataset)
+    _ = method_fn(model, train_loader, valid_loader, test_loader, train_df, config['train_params'], device, dataset, config["method"])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run experiments with optional post-processing.')
