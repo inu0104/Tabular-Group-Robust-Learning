@@ -1,0 +1,16 @@
+{
+  "dataset": "compas",
+  "model_type": "node",
+  "method": "group-test",
+  "model_params": {
+    "input_dim": 34,
+    "hidden_dim": 64,
+    "num_trees": 7,
+    "depth": 3,
+    "num_classes": 1
+  },
+  "train_params": {
+    "epochs": 30,
+    "lr": 0.006610623249595356
+  }
+}

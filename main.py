@@ -11,6 +11,7 @@ from method.d3m import run_d3m
 from method.group_dro import run_group_dro
 from method.gsr import run_gsr
 from method.gsr_plus import run_gsr_plus
+from method.group_test import run_group_test
 from models import node, tabnet, deepfm, autoint
 
 MODEL_CLASSES = {
@@ -21,10 +22,11 @@ MODEL_CLASSES = {
 }
 METHODS = {
     'd3m': run_d3m,
-    'group_dro' : run_group_dro,
+    'group-dro' : run_group_dro,
     'gsr': run_gsr,
     "gsr-hf" : run_gsr,
-    'gsr-plus' : run_gsr_plus
+    'gsr-plus' : run_gsr_plus,
+    'group-test' : run_group_test
 }
 
 def main(config_file):
@@ -32,7 +34,7 @@ def main(config_file):
     with open(config_file, 'r') as f:
         config = json.load(f)
 
-    seed = config.get("seed", 2025)
+    seed = config.get("seed", 2026)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)

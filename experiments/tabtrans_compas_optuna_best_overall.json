@@ -1,0 +1,27 @@
+{
+  "dataset": "compas",
+  "model_type": "tabtrans",
+  "method": "group-test",
+  "model_params": {
+    "categories": [
+      3,
+      13,
+      10,
+      1,
+      4,
+      1,
+      4
+    ],
+    "num_continuous": 7,
+    "dim": 64,
+    "depth": 4,
+    "heads": 8,
+    "dim_head": 16,
+    "num_classes": 1
+  },
+  "train_params": {
+    "epochs": 30,
+    "lr": 0.00024178547853212875,
+    "batch_size": 128
+  }
+}

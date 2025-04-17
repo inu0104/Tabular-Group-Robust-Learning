@@ -1,0 +1,18 @@
+{
+  "dataset": "compas",
+  "model_type": "tabnet",
+  "method": "group-test",
+  "model_params": {
+    "input_dim": 34,
+    "hidden_dim": 64,
+    "num_classes": 1,
+    "n_steps": 3,
+    "gamma": 1.014152226707991,
+    "dropout": 0.010088273489022859
+  },
+  "train_params": {
+    "epochs": 30,
+    "lr": 0.0025164887935172626,
+    "lambda_sparse": 0.001
+  }
+}

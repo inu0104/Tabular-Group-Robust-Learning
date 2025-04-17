@@ -1,15 +1,19 @@
 import copy
 
 from models.tabnet import TabNet
-from models.autoint import AutoInt
-from models.deepfm import DeepFM
 from models.node import NODE
+from utils.data_loader import GroupDataset
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.utils.data import random_split, Subset, DataLoader
+from torch.utils.data import random_split, DataLoader
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+
 
 def split_train_set(train_loader, alpha=0.1, seed=42):
     dataset = train_loader.dataset
@@ -18,28 +22,31 @@ def split_train_set(train_loader, alpha=0.1, seed=42):
     n_remain = n_total - n_held
 
     torch.manual_seed(seed)
-    held_indices, remain_indices = random_split(range(n_total), [n_held, n_remain])
-
-    held_dataset = Subset(dataset, held_indices)
-    remain_dataset = Subset(dataset, remain_indices)
+    held_dataset, remain_dataset = random_split(dataset, [n_held, n_remain])
 
     held_loader = DataLoader(held_dataset, batch_size=train_loader.batch_size, shuffle=False)
     remain_loader = DataLoader(remain_dataset, batch_size=train_loader.batch_size, shuffle=True)
 
     return held_loader, remain_loader
 
-def split_validation_set(val_loader, seed=42):
-    dataset = val_loader.dataset
-    n_total = len(dataset)
+def split_validation_set(val_dataset, batch_size, seed=42):
+    n_total = len(val_dataset)
     n_half = n_total // 2
 
     torch.manual_seed(seed)
-    part1, part2 = random_split(dataset, [n_half, n_total - n_half])
+    part1_idx, part2_idx = random_split(range(n_total), [n_half, n_total - n_half])
 
-    target_loader = DataLoader(part1, batch_size=val_loader.batch_size, shuffle=False)
-    val_loader_final = DataLoader(part2, batch_size=val_loader.batch_size, shuffle=False)
-    return target_loader, val_loader_final
+    df = val_dataset.data.reset_index(drop=True)
+    df_part1 = df.iloc[part1_idx.indices]
+    df_part2 = df.iloc[part2_idx.indices]
 
+    dataset_part1 = GroupDataset.from_dataframe(df_part1)
+    dataset_part2 = GroupDataset.from_dataframe(df_part2)
+
+    loader_part1 = DataLoader(dataset_part1, batch_size=batch_size, shuffle=False)
+    loader_part2 = DataLoader(dataset_part2, batch_size=batch_size, shuffle=False)
+
+    return loader_part1, loader_part2
 ###########################################################################
 
 class TabNetFeatureExtractor(nn.Module):
@@ -114,12 +121,6 @@ def get_feature_extractor(model):
     
     if isinstance(model, TabNet):
         return TabNetFeatureExtractor(model)
-
-    elif isinstance(model, AutoInt):
-        return AutoIntFeatureExtractor(model)
-
-    elif isinstance(model, DeepFM):
-        return DeepFMFeatureExtractor(model)
 
     elif isinstance(model, NODE):
         return NODEFeatureExtractor(model)
@@ -200,7 +201,7 @@ def update_gamma_plus(gamma, model, target_loader, num_groups, tau, device):
     group_count = torch.zeros(num_groups, device=device)
 
     with torch.no_grad():
-        for x, y, g, _ in target_loader:
+        for x, y, g, _, _ in target_loader:
             x, y, g = x.to(device), y.to(device), g.to(device)
             out = model(x)
             loss_vec = F.nll_loss(out, y, reduction="none")
@@ -218,18 +219,17 @@ def update_gamma_plus(gamma, model, target_loader, num_groups, tau, device):
 
 ###########################################################################
 
-def compute_aggregated_influence(feature_extractor, classifier, train_loader_held, target_loader, gamma, w, device, method):
+def compute_aggregated_influence(feature_extractor, classifier, train_loader, target_loader, gamma, device, method):
     # 1. ξ 초기화 (sample 개수와 같은 길이의 0 vector)
-    n = len(train_loader_held.dataset)
-    xi = torch.zeros(n, device=device)
-    
+    n_train = len(train_loader.dataset)
+  
     target_x, target_y, target_group, target_id = [], [], [], []
     
-    for x, y, g, sid in target_loader:
+    for x, y, g, _, idx in target_loader:
         target_x.append(x)
         target_y.append(y)
         target_group.append(g)
-        target_id.append(sid)
+        target_id.append(idx)
 
     target_x = torch.cat(target_x).to(device)
     target_y = torch.cat(target_y).to(device)
@@ -239,48 +239,46 @@ def compute_aggregated_influence(feature_extractor, classifier, train_loader_hel
     unique_groups = torch.unique(target_group)
     
     # 2. 각 그룹 g에 대해 반복
-
     for g in unique_groups:
         g = g.item()
   
         if method == 'gsr-hf':
             influence = compute_group_influence_hf(
                 feature_extractor, classifier,
-                train_loader_held,
+                train_loader,
                 target_x, target_y,
                 g, 
                 target_group,
-                w, 
                 device
             )
         elif method == 'gsr':
-        # 2-2. influence 계산 (Vanilla GSR 방식)
             influence = compute_group_influence(
                 feature_extractor, classifier,
-                train_loader_held,
+                train_loader,
                 target_x, target_y,
                 g, 
                 target_group,
-                w, 
                 device
             )
         elif method == 'gsr-plus':
             influence = compute_group_influence_plus(
-                classifier,  # classifier == model in gsr_plus
-                train_loader_held,
+                classifier,  
+                train_loader,
                 target_x, target_y,
-                g, target_group, w, device
+                g, target_group, device
             )
         else:
             raise ValueError(f"Unknown method: {method}")  
         
         #print(g, group_size)
-        influence = influence / (influence.abs().max() + 1e-8)
-        influence = torch.clamp(influence, min=-1.0, max=1.0)
-
+        influence_score = influence[:, 1]
+        influence_score = influence_score / (influence_score.abs().max() + 1e-8)
+        influence_score = torch.clamp(influence_score, min=-1.0, max=1.0)
+        
+        influence = torch.stack([influence[:, 0], influence_score], dim=1)
         
         # 2-3. ξ += gamma[g] * influence
-        xi += gamma[g] * influence
+        xi = torch.stack([influence[:, 0], gamma[g] * influence[:, 1]], dim=1)
         
     return xi
 
@@ -291,7 +289,6 @@ def compute_group_influence_hf(
     target_x, target_y,
     group_id, 
     target_group,
-    w,
     device
 ):
     
@@ -309,7 +306,6 @@ def compute_group_influence_hf(
         all_y.append(y)
     x_held = torch.cat(all_x).to(device)
     y_held = torch.cat(all_y).to(device)
-    w = w.to(device)
 
     feats_held = feature_extractor(x_held)
     loss_vec = F.nll_loss(classifier(feats_held), y_held, reduction="none")
@@ -341,7 +337,6 @@ def compute_group_influence(
     target_x, target_y,
     group_id, 
     target_group,
-    w,
     device
 ):
     """
@@ -361,7 +356,6 @@ def compute_group_influence(
         all_y.append(y)
     x_held = torch.cat(all_x).to(device)
     y_held = torch.cat(all_y).to(device)
-    w = w.to(device)
 
     feats_held = feature_extractor(x_held)
     loss_vec = F.nll_loss(classifier(feats_held), y_held, reduction="none")
@@ -392,10 +386,9 @@ def compute_group_influence_plus(
     target_x, target_y,
     group_id, 
     target_group,
-    w,
     device,
-    damping=0.1,
-    scale=0.01,
+    damping=0.2,
+    scale=0.001,
     depth=30
 ):
     model.eval()
@@ -406,12 +399,14 @@ def compute_group_influence_plus(
     group_y = target_y[group_mask]
 
     # held-out 데이터 준비
-    x_held, y_held = [], []
-    for x, y, _, _ in train_loader_held:
+    x_held, y_held, sample_ids_held  = [], [], []
+    for x, y, _, sample_id, _ in train_loader_held:
         x_held.append(x)
         y_held.append(y)
+        sample_ids_held.append(sample_id)
     x_held = torch.cat(x_held).to(device)
     y_held = torch.cat(y_held).to(device)
+    sample_ids_held = torch.cat(sample_ids_held).to(device)
 
     # gradients per sample (train held-out)
     outputs_held = model(x_held)
@@ -429,12 +424,12 @@ def compute_group_influence_plus(
     grad_group = torch.autograd.grad(loss_group, params, create_graph=True)
     grad_group_vec = torch.cat([g.view(-1) for g in grad_group])
 
-    # LiSSA 방식으로 Hessian-inverse @ grad 계산
+    loss_held_mean = loss_vec_held.mean()
+    grad_params = torch.autograd.grad(loss_held_mean, params, create_graph=True)
+    flat_grad = torch.cat([g.view(-1) for g in grad_params])
+
     def hvp(vec):
-        out = model(x_held)
-        loss = F.nll_loss(out, y_held)
-        grad_params = torch.autograd.grad(loss, params, create_graph=True)
-        flat_grad = torch.cat([g.view(-1) for g in grad_params])
+    # Hv = ∇²L · v ≈ grad(grad(L)^T · v)
         grad_dot_vec = torch.dot(flat_grad, vec)
         hv = torch.autograd.grad(grad_dot_vec, params, retain_graph=True)
         hv_flat = torch.cat([g.contiguous().view(-1) for g in hv])
@@ -444,21 +439,25 @@ def compute_group_influence_plus(
     for _ in range(depth):
         hvp_est = hvp(cur_estimate)
         cur_estimate = grad_group_vec + (1 - damping) * cur_estimate - scale * hvp_est
-        
         cur_estimate = torch.clamp(cur_estimate, min=-10.0, max=10.0)
-    ihvp = cur_estimate.detach()
 
-    # influence 계산 (정확히 논문과 일치)
+    ihvp = cur_estimate.detach()
     influence_scores = -torch.matmul(grads_held, ihvp)
 
-    return influence_scores.detach()
+    # sample_id 기준으로 넣기
+    influence_with_id = torch.stack([sample_ids_held.float(), influence_scores], dim=1)
+    return influence_with_id.detach()
 
 ###########################################################################
 
-def update_w(w, lr_w, xi):
-    w = w - lr_w * xi
-    w = torch.clamp(w, min=0)
-    w = w / w.sum()
+def update_w(w, lr_w, xi):    
+    sample_ids = w[:, 0]
+
+    w_values = w[:, 1] - lr_w * xi[:, 1]
+    w_values = torch.clamp(w_values, min=0)
+    w_values = w_values / (w_values.sum() + 1e-8)
+    
+    w = torch.stack([sample_ids, w_values], dim=1)
     return w
 
 ###########################################################################
@@ -534,7 +533,7 @@ def tuple_evaluate_plus(model, dataloader, dataset_name="Val", device="cuda"):
 
     outputs, labels = [], []
     with torch.no_grad():
-        for x, y, _, _ in dataloader:
+        for x, y, _, _, _ in dataloader:
             x = x.to(device)
             out = model(x)
             outputs.append(out.cpu())
@@ -596,30 +595,31 @@ def tuple_evaluate_plus(model, dataloader, dataset_name="Val", device="cuda"):
 
 ###########################################################################
 
-def log_group_weights(w, train_loader_held, device):
+def log_group_weights(w, train_loader, device):
     group_weights = {}
     group_counts = {}
-    all_groups = []
+    
+    idx_to_weight = {int(sample_id.item()): weight.item() for sample_id, weight in w}
+    
+    for _, _, group, sid, _ in train_loader:
+        group = group.to(device)
+        sid = sid.to(device)
+        weights_list = [idx_to_weight[int(i)] for i in sid.tolist()]
+        weights = torch.tensor(weights_list, device=device)
 
-    # 각 sample의 group ID 추출
-    for _, _, group, _ in train_loader_held:
-        all_groups.append(group)
-    all_groups = torch.cat(all_groups).to(device)
+        for i in range(len(group)):
+            g = group[i].item()
+            group_weights[g] = group_weights.get(g, 0.0) + weights[i].item()
+            group_counts[g] = group_counts.get(g, 0) + 1
 
-    for i, group_id in enumerate(all_groups):
-        g = group_id.item()
-        group_weights[g] = group_weights.get(g, 0.0) + w[i].item()
-        group_counts[g] = group_counts.get(g, 0) + 1
-
-    # 그룹별 평균 계산
     group_avgs = {g: group_weights[g] / group_counts[g] for g in group_weights}
 
-    # 출력 없이 반환만
     return {
         "sum": group_weights,
         "avg": group_avgs,
         "count": group_counts
     }
+
 
 
 

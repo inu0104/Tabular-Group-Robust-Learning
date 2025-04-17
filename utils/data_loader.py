@@ -31,7 +31,19 @@ class GroupDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        return self.features[idx], self.labels[idx], self.groups[idx], self.sample_ids[idx] 
+        return self.features[idx], self.labels[idx], self.groups[idx], self.sample_ids[idx], idx
+
+    @staticmethod
+    def from_dataframe(df):
+        obj = GroupDataset.__new__(GroupDataset)
+        obj.data = df.copy()
+
+        obj.sample_ids = torch.tensor(df["sample_id"].values, dtype=torch.long)
+        obj.groups = torch.tensor(df["group"].values, dtype=torch.long)
+        obj.labels = torch.tensor(df["target"].values, dtype=torch.long)
+        obj.features = torch.tensor(df.drop(columns=["target", "sample_id", "group"]).values, dtype=torch.float32)
+
+        return obj
 
 
 def get_column_names(names_file):
@@ -75,7 +87,7 @@ def load_data(config):
             test = pd.read_csv(test_path, header=None, names=columns, na_values=" ?", skipinitialspace=True, skiprows=skip_rows)
             
             train["target"] = train["income"].apply(lambda x: 1 if x.strip() == ">50K" else 0)
-            test["target"] = test["income"].apply(lambda x: 1 if x.strip() == ">50K" else 0)
+            test["target"] = test["income"].apply(lambda x: 1 if x.strip() == ">50K." else 0)
             train.drop(columns=["income"], inplace=True)
             test.drop(columns=["income"], inplace=True)
             
@@ -109,7 +121,7 @@ def load_data(config):
 
             train_df, val_df = train_test_split(
                 full_train_df,
-                test_size=0.2,
+                test_size=0.4,
                 stratify=full_train_df["target"],
                 random_state=42
             )
@@ -139,10 +151,14 @@ def load_data(config):
             df = df[df['target']!=-1]
   
             le = LabelEncoder()
-            df["group"] = le.fit_transform(df["sex"])
+            df["group"] = le.fit_transform(df["race"])
+            # df["group1"] = le.fit_transform(df["sex"])
+            # df["group2"] = le.fit_transform(df["race"])
+            
+            # df["group"] = (df["group1"] * 2 + df["group2"]).astype(int)
             
             drop_cols = [
-                'id', 'name', 'first', 'last', 'sex', 'dob', 'is_recid', 'race',
+                'id', 'name', 'first', 'last', 'sex', 'dob', 'is_recid', 'race', #'group1', 'group2',
                 'c_jail_in', 'c_jail_out', 'c_days_from_compas', 'c_charge_desc',
                 'r_offense_date', 'r_charge_desc', 'r_jail_in',
                 'violent_recid', 'is_violent_recid',
@@ -287,7 +303,73 @@ def load_data(config):
             test_df.to_csv(test_file, index=False)
 
 #########################################################################################################  
-           
+
+    #CREDIT
+    elif(dataset == 'credit'):
+        data_path = "./dataset/credit/credit.csv"
+        train_file = "./dataset/credit/train_processed.csv"
+        val_file = "./dataset/credit/valid_processed.csv"
+        test_file = "./dataset/credit/test_processed.csv"
+
+        if not (os.path.exists(train_file) and os.path.exists(test_file) and os.path.exists(val_file)):
+            df = pd.read_csv(data_path, skiprows=1)
+         
+            df["target"] = df["default payment next month"].astype(int)
+            df = df[df['target']!=-1]
+  
+            le = LabelEncoder()
+            df["group"] = (df["AGE"] // 10).astype(int)
+            
+            drop_cols = [
+                'ID','AGE','default payment next month'
+            #     'id', 'name', 'first', 'last', 'sex', 'dob', 'is_recid', 'race',
+            #     'c_jail_in', 'c_jail_out', 'c_days_from_compas', 'c_charge_desc',
+            #     'r_offense_date', 'r_charge_desc', 'r_jail_in',
+            #     'violent_recid', 'is_violent_recid',
+            #     'vr_offense_date', 'vr_charge_desc',
+            #     'decile_score.1', 'screening_date', 'event',
+            #     'priors_count.1', 'start', 'end', 
+            #     'decile_score','v_decile_score',
+            #     'r_charge_degree' #data_leakeage
+            ]
+            df.drop(columns=drop_cols, inplace=True, errors='ignore')
+
+            # if 'type_of_assessment' in df.columns and df['type_of_assessment'].nunique() > 5:
+            #     df = group_rare_categories(df, 'type_of_assessment', top_n=3)
+            
+            numerical_columns = [
+                'LIMIT_BAL', 'BILL_AMT1', 'BILL_AMT2', 'BILL_AMT3', 'BILL_AMT4', 'BILL_AMT5', 'BILL_AMT6',  
+                'PAY_AMT1', 'PAY_AMT2', 'PAY_AMT3', 'PAY_AMT4', 'PAY_AMT5', 'PAY_AMT6'
+            ]
+            df[numerical_columns] = df[numerical_columns].fillna(0)
+            
+            categorical_columns = [
+                'SEX', 'EDUCATION', 'MARRIAGE',
+                'PAY_0', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6'
+            ]
+            categorical_columns = [col for col in categorical_columns if col in df.columns]
+            
+            df = pd.get_dummies(df, columns=categorical_columns, drop_first=True)
+    
+            scaler = StandardScaler()
+            df[numerical_columns] = scaler.fit_transform(df[numerical_columns])
+            df_final = df.reset_index(drop=True)
+            
+            feature_cols = [col for col in df_final.columns if col not in ["sample_id", "target", "group"]]
+            df_final[feature_cols] = df_final[feature_cols].astype("float32")
+            
+            train_val_df, test_df = train_test_split(df_final, test_size=0.3, random_state=42, stratify=df_final["target"])
+            train_df, val_df = train_test_split(train_val_df, test_size=0.3, random_state=42, stratify=train_val_df["target"])
+
+            for df in [train_df, val_df, test_df]:
+                df.reset_index(inplace=True)
+                df.rename(columns={"index": "sample_id"}, inplace=True)
+
+            train_df.to_csv(train_file, index=False)
+            val_df.to_csv(val_file, index=False)
+            test_df.to_csv(test_file, index=False)
+
+#########################################################################################################     
     train_df = pd.read_csv(train_file)
     
     train_dataset = GroupDataset(train_file)
