@@ -1,0 +1,17 @@
+{
+  "dataset": "adult",
+  "model_type": "node",
+  "method": "group-dro",
+  "model_params": {
+    "input_dim": 12,
+    "hidden_dim": 64,
+    "num_trees": 7,
+    "depth": 2,
+    "num_classes": 1
+  },
+  "train_params": {
+    "epochs": 30,
+    "lr": 0.007252387935904364,
+    "group_dro_eta": 0.00010055270076599274
+  }
+}

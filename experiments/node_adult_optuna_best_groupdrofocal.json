@@ -1,0 +1,18 @@
+{
+  "dataset": "adult",
+  "model_type": "node",
+  "method": "group-dro-focal",
+  "model_params": {
+    "input_dim": 12,
+    "hidden_dim": 64,
+    "num_trees": 7,
+    "depth": 2,
+    "num_classes": 1
+  },
+  "train_params": {
+    "epochs": 30,
+    "lr": 0.0012496924770608975,
+    "group_dro_eta": 0.0019313044825142061,
+    "gamma": 4.149472120757573
+  }
+}

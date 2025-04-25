@@ -67,7 +67,6 @@ def train_or_eval_model(model, train_loader, valid_loader, params, device, mode=
 ################## VALID ######################################################    
             model.eval()
             val_loss_total = 0
-            n_val = 0
             model.eval()
             with torch.no_grad():
                 if mode == 'trans':
@@ -77,17 +76,15 @@ def train_or_eval_model(model, train_loader, valid_loader, params, device, mode=
                         x_val = (x_cat,x_num)
                         y_val = y_val.to(device).float()
                         loss = loss_fn(model, x_val, y_val, g_val)
-                        val_loss_total += loss.sum().item()
-                        n_val += y_val.size(0)
+                        val_loss_total += loss.item()
                 else:
                     for x_val, y_val, g_val, _, _ in valid_loader:
                         x_val = x_val.to(device)
                         y_val = y_val.to(device).float()
                         loss = loss_fn(model, x_val, y_val, g_val)
-                        val_loss_total += loss.sum().item()
-                        n_val += y_val.size(0)
+                        val_loss_total += loss.item()
 
-            avg_val_loss = val_loss_total / n_val
+            avg_val_loss = val_loss_total / len(valid_loader)
             
             #print(f"Epoch [{epoch+1}/{epochs}] | Train Loss: {avg_train_loss:.4f} | Val Loss: {avg_val_loss:.4f}")
 

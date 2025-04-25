@@ -3,11 +3,18 @@ import torch
 import torch.nn.functional as F
 from utils.train import train_or_eval_model
 
+def focal_loss(logits, targets, gamma=2.0):
+    prob = torch.sigmoid(logits)
+    pt = prob * targets + (1 - prob) * (1 - targets)
+    loss = - (1 - pt) ** gamma * torch.log(pt + 1e-12)
+    return loss.mean()
+
 class GroupDRO:
-    def __init__(self, criterion, n_groups, inv_group_ratios, step_size_q, device='cpu'):
+    def __init__(self, criterion, n_groups, inv_group_ratios, step_size_q=0.01, gamma=2.0, device='cpu'):
         self.criterion = criterion
         self.n_groups = n_groups
         self.step_size_q = step_size_q
+        self.gamma = gamma 
         self.q = torch.ones(n_groups, device=device) / n_groups
         self.device = device
         self.inv_group_ratios = inv_group_ratios
@@ -21,11 +28,19 @@ class GroupDRO:
                 x_g = x[selected]
                 y_g = y[selected].float().view(-1)
                 yhat_g = model(x_g).view(-1)
-                loss = self.criterion(yhat_g, y_g)
+
+                # Focal Loss with gamma
+                prob = torch.sigmoid(yhat_g)
+                pt = prob * y_g + (1 - prob) * (1 - y_g)
+                hard_weights = (1 - pt).detach() ** self.gamma
+                loss = -hard_weights * torch.log(pt + 1e-12)
+                loss = loss.mean()
+
                 loss_ls.append(loss)
             else:
                 loss_ls.append(torch.tensor(0.0, device=self.device, requires_grad=True))
-        # update q
+
+        # hardness 기반 group weighting
         q_prime = self.q.clone()
         for g in range(self.n_groups):
             scale = self.inv_group_ratios[g]
@@ -122,7 +137,7 @@ def get_inverse_group_ratios(train_loader, n_groups, device='cpu'):
     return inv_ratios
 
 
-def run_group_dro(model, train_loader, valid_loader, test_loader, train_df, train_params, device, dataset, method):
+def run_group_dro_focal(model, train_loader, valid_loader, test_loader, train_df, train_params, device, dataset, method):
     print(f"🔥 Running GroupDRO Method on {device}...")
 
     n_groups = train_df['group'].nunique()
@@ -130,6 +145,7 @@ def run_group_dro(model, train_loader, valid_loader, test_loader, train_df, trai
     is_tabnet = model.__class__.__name__.lower().startswith("tabnet")
     lambda_sparse = train_params.get("lambda_sparse", 1e-3) if is_tabnet else 0.0
     step_size_q = train_params.get("group_dro_eta", 0.01)
+    gamma = train_params.get("gamma", 0.01)
 
     inv_group_ratios = get_inverse_group_ratios(train_loader, n_groups, device)
 
@@ -158,7 +174,7 @@ def run_group_dro(model, train_loader, valid_loader, test_loader, train_df, trai
     ##############################
     # 2. GroupDRO
     ##############################
-    group_dro = GroupDRO(criterion, n_groups=n_groups, inv_group_ratios=inv_group_ratios, step_size_q=step_size_q, device=device)
+    group_dro = GroupDRO(criterion, n_groups=n_groups, inv_group_ratios=inv_group_ratios, step_size_q=0.01, device=device)
 
     def loss_fn_gdro(model, x, y, group=None, sample_ids=None):
         if is_tabnet:
@@ -180,53 +196,53 @@ def run_group_dro(model, train_loader, valid_loader, test_loader, train_df, trai
         loss_fn=loss_fn_gdro
     )
     return model_gdro
+    
+    # # ##############################
+    # # # 3. SoftGroupDRO
+    # # ##############################
+    # soft_group_dro = SoftGroupDRO(criterion, n_groups=n_groups, inv_group_ratios=inv_group_ratios, step_size_q=0.1, device=device)
 
-    # ##############################
-    # # 3. SoftGroupDRO
-    # ##############################
-    soft_group_dro = SoftGroupDRO(criterion, n_groups=n_groups, inv_group_ratios=inv_group_ratios, step_size_q=0.1, device=device)
+    # def loss_fn_sgdro(model, x, y, group=None, sample_ids=None):
+    #     if is_tabnet:
+    #         output, M_loss = model(x, return_loss=True)
+    #         loss = soft_group_dro.loss(model, x, y, group)
+    #         return loss + lambda_sparse * M_loss
+    #     else:
+    #         return soft_group_dro.loss(model, x, y, group)
 
-    def loss_fn_sgdro(model, x, y, group=None, sample_ids=None):
-        if is_tabnet:
-            output, M_loss = model(x, return_loss=True)
-            loss = soft_group_dro.loss(model, x, y, group)
-            return loss + lambda_sparse * M_loss
-        else:
-            return soft_group_dro.loss(model, x, y, group)
+    # model_sgdro = copy.deepcopy(model)
+    # model_sgdro = train_or_eval_model(
+    #     model=model_sgdro,
+    #     train_loader=train_loader,
+    #     valid_loader=valid_loader,
+    #     params=train_params,
+    #     device=device,
+    #     mode="train",
+    #     loss_fn=loss_fn_sgdro
+    # )
 
-    model_sgdro = copy.deepcopy(model)
-    model_sgdro = train_or_eval_model(
-        model=model_sgdro,
-        train_loader=train_loader,
-        valid_loader=valid_loader,
-        params=train_params,
-        device=device,
-        mode="train",
-        loss_fn=loss_fn_sgdro
-    )
+    # # ##############################
+    # # # 4. HardGroupDRO
+    # # ##############################
+    # hard_group_dro = HardGroupDRO(criterion, n_groups=n_groups, inv_group_ratios=inv_group_ratios, device=device)
 
-    # ##############################
-    # # 4. HardGroupDRO
-    # ##############################
-    hard_group_dro = HardGroupDRO(criterion, n_groups=n_groups, inv_group_ratios=inv_group_ratios, device=device)
+    # def loss_fn_hgdro(model, x, y, group=None, sample_ids=None):
+    #     if is_tabnet:
+    #         output, M_loss = model(x, return_loss=True)
+    #         loss = hard_group_dro.loss(model, x, y, group)
+    #         return loss + lambda_sparse * M_loss
+    #     else:
+    #         return hard_group_dro.loss(model, x, y, group)
 
-    def loss_fn_hgdro(model, x, y, group=None, sample_ids=None):
-        if is_tabnet:
-            output, M_loss = model(x, return_loss=True)
-            loss = hard_group_dro.loss(model, x, y, group)
-            return loss + lambda_sparse * M_loss
-        else:
-            return hard_group_dro.loss(model, x, y, group)
+    # model_hgdro = copy.deepcopy(model)
+    # model_hgdro = train_or_eval_model(
+    #     model=model_hgdro,
+    #     train_loader=train_loader,
+    #     valid_loader=valid_loader,
+    #     params=train_params,
+    #     device=device,
+    #     mode="train",
+    #     loss_fn=loss_fn_hgdro
+    # )
 
-    model_hgdro = copy.deepcopy(model)
-    model_hgdro = train_or_eval_model(
-        model=model_hgdro,
-        train_loader=train_loader,
-        valid_loader=valid_loader,
-        params=train_params,
-        device=device,
-        mode="train",
-        loss_fn=loss_fn_hgdro
-    )
-
-    return model_erm, model_gdro, model_sgdro, model_hgdro
+    # return model_erm, model_gdro, model_sgdro, model_hgdro

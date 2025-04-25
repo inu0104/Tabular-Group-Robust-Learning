@@ -1,0 +1,18 @@
+{
+  "dataset": "compas",
+  "model_type": "node",
+  "method": "group-dro-focal",
+  "model_params": {
+    "input_dim": 34,
+    "hidden_dim": 64,
+    "num_trees": 7,
+    "depth": 2,
+    "num_classes": 1
+  },
+  "train_params": {
+    "epochs": 30,
+    "lr": 0.001009607067434045,
+    "group_dro_eta": 0.014520102298759453,
+    "gamma": 1.8654728024300191
+  }
+}

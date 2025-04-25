@@ -3,29 +3,37 @@ import torch
 import torch.nn.functional as F
 from utils.train import train_or_eval_model
 
-class GroupDRO:
-    def __init__(self, criterion, n_groups, inv_group_ratios, step_size_q, device='cpu'):
-        self.criterion = criterion
+class GroupMarginDRO:
+    def __init__(self, n_groups, inv_group_ratios, margin=1.0, step_size_q=0.01, device='cpu'):
+        self.margin = margin
         self.n_groups = n_groups
         self.step_size_q = step_size_q
         self.q = torch.ones(n_groups, device=device) / n_groups
-        self.device = device
         self.inv_group_ratios = inv_group_ratios
+        self.device = device
+
+    def group_margin_loss(self, logits, labels):
+        pos = logits[labels == 1]
+        neg = logits[labels == 0]
+        if len(pos) == 0 or len(neg) == 0:
+            return torch.tensor(0.0, device=logits.device, requires_grad=True)
+        margin_diff = self.margin - (pos.view(-1, 1) - neg.view(1, -1))
+        loss = F.relu(margin_diff).mean()
+        return loss
 
     def loss(self, model, x, y, group_idx):
         loss_ls = []
-
         for g in range(self.n_groups):
             selected = (group_idx == g)
             if selected.sum() > 0:
                 x_g = x[selected]
                 y_g = y[selected].float().view(-1)
                 yhat_g = model(x_g).view(-1)
-                loss = self.criterion(yhat_g, y_g)
+                loss = self.group_margin_loss(yhat_g, y_g)
                 loss_ls.append(loss)
             else:
                 loss_ls.append(torch.tensor(0.0, device=self.device, requires_grad=True))
-        # update q
+
         q_prime = self.q.clone()
         for g in range(self.n_groups):
             scale = self.inv_group_ratios[g]
@@ -122,49 +130,48 @@ def get_inverse_group_ratios(train_loader, n_groups, device='cpu'):
     return inv_ratios
 
 
-def run_group_dro(model, train_loader, valid_loader, test_loader, train_df, train_params, device, dataset, method):
-    print(f"🔥 Running GroupDRO Method on {device}...")
+def run_group_dro_margin(model, train_loader, valid_loader, test_loader, train_df, train_params, device, dataset, method):
+    print(f"🔥 Running GroupDRO-Margin Method on {device}...")
 
     n_groups = train_df['group'].nunique()
-    criterion = torch.nn.BCEWithLogitsLoss(reduction='mean')
     is_tabnet = model.__class__.__name__.lower().startswith("tabnet")
     lambda_sparse = train_params.get("lambda_sparse", 1e-3) if is_tabnet else 0.0
-    step_size_q = train_params.get("group_dro_eta", 0.01)
 
+    # group 비율에 기반한 inverse 비율 계산
     inv_group_ratios = get_inverse_group_ratios(train_loader, n_groups, device)
 
-    if is_tabnet:
-        def loss_fn_erm(model, x, y, group=None, sample_ids=None):
+    ##############################
+    # 1. ERM (Baseline)
+    ##############################
+    def loss_fn_erm(model, x, y, group=None, sample_ids=None):
+        if is_tabnet:
             output, M_loss = model(x, return_loss=True)
             loss = F.binary_cross_entropy_with_logits(output.squeeze(), y.float())
             return loss + lambda_sparse * M_loss
-    else:
-        loss_fn_erm = None 
+        else:
+            output = model(x)
+            return F.binary_cross_entropy_with_logits(output.view(-1), y.float())
 
-    # ##############################
-    # # 1. ERM
-    # ##############################
-    # model_erm = copy.deepcopy(model)
-    # model_erm = train_or_eval_model(
-    #     model=model_erm,
-    #     train_loader=train_loader,
-    #     valid_loader=valid_loader,
-    #     params=train_params,
-    #     device=device,
-    #     mode="train",
-    #     loss_fn=loss_fn_erm
-    # )
+    model_erm = copy.deepcopy(model)
+    model_erm = train_or_eval_model(
+        model=model_erm,
+        train_loader=train_loader,
+        valid_loader=valid_loader,
+        params=train_params,
+        device=device,
+        mode="train",
+        loss_fn=loss_fn_erm
+    )
 
     ##############################
-    # 2. GroupDRO
+    # 2. GroupMarginDRO
     ##############################
-    group_dro = GroupDRO(criterion, n_groups=n_groups, inv_group_ratios=inv_group_ratios, step_size_q=step_size_q, device=device)
+    group_dro = GroupMarginDRO(n_groups=n_groups, inv_group_ratios=inv_group_ratios, margin=1.0, step_size_q=0.01, device=device)
 
-    def loss_fn_gdro(model, x, y, group=None, sample_ids=None):
+    def loss_fn_margin(model, x, y, group=None, sample_ids=None):
         if is_tabnet:
             output, M_loss = model(x, return_loss=True)
-            loss = group_dro.loss(model, x, y, group) 
-            
+            loss = group_dro.loss(model, x, y, group)
             return loss + lambda_sparse * M_loss
         else:
             return group_dro.loss(model, x, y, group)
@@ -177,9 +184,10 @@ def run_group_dro(model, train_loader, valid_loader, test_loader, train_df, trai
         params=train_params,
         device=device,
         mode="train",
-        loss_fn=loss_fn_gdro
+        loss_fn=loss_fn_margin
     )
-    return model_gdro
+
+    return model_erm, model_gdro
 
     # ##############################
     # # 3. SoftGroupDRO

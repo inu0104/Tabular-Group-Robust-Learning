@@ -376,8 +376,10 @@ def load_data(config):
     valid_dataset = GroupDataset(val_file)
     test_dataset = GroupDataset(test_file)
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=32, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+    batch_size = config.get("train_params", {}).get("batch_size", 32)
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+    test_loader  = DataLoader(test_dataset,  batch_size=batch_size, shuffle=False)
     
     return train_loader, valid_loader, test_loader, train_df
